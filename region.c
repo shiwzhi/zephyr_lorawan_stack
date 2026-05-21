@@ -429,9 +429,31 @@ uint32_t region_get_beacon_freq(uint32_t beacon_time)
 	return 869525000U;
 }
 
-uint16_t region_get_rx_window_timeout_ms(uint8_t dr)
+uint16_t region_get_rx_window_timeout_ms(const struct region_ctx *ctx, uint8_t dr)
 {
-	/* Default: 1550ms */
-	ARG_UNUSED(dr);
-	return 1550;
+	switch (ctx->region) {
+	case LORAWAN_REGION_CN470:
+		return cn470_get_rx_window_timeout_ms(dr);
+	case LORAWAN_REGION_EU868:
+		return eu868_get_rx_window_timeout_ms(dr);
+	case LORAWAN_REGION_US915:
+		return us915_get_rx_window_timeout_ms(dr);
+	case LORAWAN_REGION_AU915:
+		return au915_get_rx_window_timeout_ms(dr);
+	case LORAWAN_REGION_KR920:
+		return kr920_get_rx_window_timeout_ms(dr);
+	case LORAWAN_REGION_IN865:
+		return in865_get_rx_window_timeout_ms(dr);
+	case LORAWAN_REGION_AS923:
+		return as923_get_rx_window_timeout_ms(dr);
+	case LORAWAN_REGION_CN779:
+		return cn779_get_rx_window_timeout_ms(dr);
+	case LORAWAN_REGION_RU864:
+		return ru864_get_rx_window_timeout_ms(dr);
+	default:
+		if (dr >= LORAWAN_MAX_DR) {
+			return 3000;
+		}
+		return 1550;
+	}
 }

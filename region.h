@@ -62,7 +62,7 @@ uint32_t region_get_rx1_freq(const struct region_ctx *ctx, uint8_t tx_ch_idx);
 const struct lorawan_channel *region_get_join_channel(const struct region_ctx *ctx);
 int region_get_max_payload(const struct region_ctx *ctx, uint8_t dr);
 uint32_t region_get_beacon_freq(uint32_t beacon_time);
-uint16_t region_get_rx_window_timeout_ms(uint8_t dr);
+uint16_t region_get_rx_window_timeout_ms(const struct region_ctx *ctx, uint8_t dr);
 
 #ifdef __cplusplus
 }

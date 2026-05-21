@@ -1193,14 +1193,70 @@ static void process_downlink(uint8_t *phy, size_t len, int16_t rssi,
 }
 
 /* -------------------------------------------------------------------------- */
+/* RX window configuration & helpers                                          */
+/* -------------------------------------------------------------------------- */
+
+#define RX_EARLY_MS             1   /* Open RX windows early to cover radio setup */
+
+struct rx_window_config {
+	uint32_t freq;
+	uint8_t dr;
+	uint16_t timeout_ms;
+	int64_t delay_ms;
+};
+
+static int open_rx_windows(int64_t tx_end_time,
+			   const struct rx_window_config *rx1,
+			   const struct rx_window_config *rx2,
+			   uint8_t *buf, size_t buflen,
+			   int16_t *rssi, int8_t *snr)
+{
+	/* Cap RX1 timeout so it never blocks past the RX2 open time.
+	 * This guarantees RX2 opens on schedule — at slow DRs where
+	 * a full packet exceeds this cap, the RX1 listen will be
+	 * cut short and the downlink falls through to RX2 instead.
+	 */
+	int64_t gap = rx2->delay_ms - rx1->delay_ms;
+	uint16_t rx1_to = rx1->timeout_ms;
+	if (gap > 10 && rx1_to > (uint16_t)(gap - 10)) {
+		rx1_to = (uint16_t)(gap - 10);
+	}
+	if (rx1_to < 10) {
+		rx1_to = 10;
+	}
+
+	int64_t now;
+
+	int64_t target = tx_end_time + rx1->delay_ms;
+	now = k_uptime_get();
+	if (now < target) {
+		k_msleep(target - now);
+	}
+	int rx_len = open_rx_window(rx1->freq, rx1->dr, buf, buflen, rssi, snr, rx1_to);
+	if (rx_len > 0) {
+		LOG_INF("Downlink received in RX1 window (%d bytes)", rx_len);
+		return rx_len;
+	}
+
+	target = tx_end_time + rx2->delay_ms;
+	now = k_uptime_get();
+	if (now < target) {
+		k_msleep(target - now);
+	}
+	rx_len = open_rx_window(rx2->freq, rx2->dr, buf, buflen, rssi, snr, rx2->timeout_ms);
+	if (rx_len > 0) {
+		LOG_INF("Downlink received in RX2 window (%d bytes)", rx_len);
+	}
+	return rx_len;
+}
+
+/* -------------------------------------------------------------------------- */
 /* OTAA Join procedure - optimized for precise RX window timing                */
 /* -------------------------------------------------------------------------- */
 
 /* Join RX window delays (per LoRaWAN spec) */
 #define JOIN_RX1_DELAY_MS      5000  /* RX1 opens 5s after TX end */
 #define JOIN_RX2_DELAY_MS      6000  /* RX2 opens 6s after TX end */
-#define JOIN_RX_EARLY_MS       100   /* Open slightly early to compensate setup */
-#define JOIN_RX_TIMEOUT_MS     3000  /* Join uses DR0, max ToA ~1400ms */
 
 static int send_join_request(uint8_t *rx_buf, size_t rx_buflen)
 {
@@ -1253,35 +1309,23 @@ static int send_join_request(uint8_t *rx_buf, size_t rx_buflen)
 	/* ---- RX windows: only k_msleep between TX and recv ---- */
 	int16_t rssi;
 	int8_t snr;
-	int rx_len;
 
-	/* RX1 window */
-	int64_t rx1_target = tx_end_time + JOIN_RX1_DELAY_MS - JOIN_RX_EARLY_MS;
-	int64_t now = k_uptime_get();
-	if (now < rx1_target) {
-		k_msleep(rx1_target - now);
-	}
-	rx_len = open_rx_window(rx1_freq, rx1_dr,
-				rx_buf, rx_buflen, &rssi, &snr, JOIN_RX_TIMEOUT_MS);
-	if (rx_len > 0) {
-		LOG_INF("Join-Accept received in RX1 window");
-		/* Persist DevNonce AFTER successful join (not before) */
-		if (storage_initialized) {
-			nvs_write(&fs, NVS_DEV_NONCE_ID, &g_ctx.dev_nonce, sizeof(g_ctx.dev_nonce));
-		}
-		return rx_len;
-	}
+	struct rx_window_config rx1_cfg = {
+		.freq = rx1_freq,
+		.dr = rx1_dr,
+		.timeout_ms = region_get_rx_window_timeout_ms(&g_ctx.region, rx1_dr),
+		.delay_ms = JOIN_RX1_DELAY_MS - RX_EARLY_MS,
+	};
+	struct rx_window_config rx2_cfg = {
+		.freq = rx2_freq,
+		.dr = rx2_dr,
+		.timeout_ms = region_get_rx_window_timeout_ms(&g_ctx.region, rx2_dr),
+		.delay_ms = JOIN_RX2_DELAY_MS - RX_EARLY_MS,
+	};
 
-	/* RX2 window */
-	int64_t rx2_target = tx_end_time + JOIN_RX2_DELAY_MS - JOIN_RX_EARLY_MS;
-	now = k_uptime_get();
-	if (now < rx2_target) {
-		k_msleep(rx2_target - now);
-	}
-	rx_len = open_rx_window(rx2_freq, rx2_dr,
-				rx_buf, rx_buflen, &rssi, &snr, JOIN_RX_TIMEOUT_MS);
+	int rx_len = open_rx_windows(tx_end_time, &rx1_cfg, &rx2_cfg,
+				     rx_buf, rx_buflen, &rssi, &snr);
 	if (rx_len > 0) {
-		LOG_INF("Join-Accept received in RX2 window");
 		if (storage_initialized) {
 			nvs_write(&fs, NVS_DEV_NONCE_ID, &g_ctx.dev_nonce, sizeof(g_ctx.dev_nonce));
 		}
@@ -1641,13 +1685,13 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len,
 						g_ctx.last_tx_channel);
 		rx2_freq = get_rx2_freq();
 		rx2_dr = get_rx2_dr();
-		rx1_timeout = region_get_rx_window_timeout_ms(rx1_dr) + 100;
-		rx2_timeout = region_get_rx_window_timeout_ms(rx2_dr) + 100;
+		rx1_timeout = region_get_rx_window_timeout_ms(&g_ctx.region, rx1_dr);
+		rx2_timeout = region_get_rx_window_timeout_ms(&g_ctx.region, rx2_dr);
 		/* Use rx_timing_delay if set by RXTimingSetupReq, else region default */
 		uint8_t rx1_delay = (g_ctx.rx_timing_delay != 0) ?
 				    g_ctx.rx_timing_delay : g_ctx.region.rx1_delay_s;
-		rx1_delay_ms = rx1_delay * 1000 - 100;
-		rx2_delay_ms = (rx1_delay + 1) * 1000 - 100;  /* RX2 = RX1 + 1s */
+		rx1_delay_ms = rx1_delay * 1000 - RX_EARLY_MS;
+		rx2_delay_ms = (rx1_delay + 1) * 1000 - RX_EARLY_MS;  /* RX2 = RX1 + 1s */
 		open_rx = true;
 	}
 
@@ -1683,32 +1727,27 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len,
 		uint8_t rx_buf[MAX_PHY_PAYLOAD];
 		int16_t rssi;
 		int8_t snr;
-		int rx_len;
 
-		/* RX1 window */
-		int64_t rx1_target = tx_end_time + rx1_delay_ms;
-		int64_t now = k_uptime_get();
-		LOG_INF("RX1: target=%lld, now=%lld, freq=%u, dr=%u, to=%u",
-			rx1_target, now, rx1_freq, rx1_dr, rx1_timeout);
-		if (now < rx1_target) {
-			k_msleep(rx1_target - now);
-		}
-		rx_len = open_rx_window(rx1_freq, rx1_dr, rx_buf,
-				       sizeof(rx_buf), &rssi, &snr, rx1_timeout);
-		if (rx_len <= 0) {
-			/* RX2 window */
-			int64_t rx2_target = tx_end_time + rx2_delay_ms;
-			now = k_uptime_get();
-			LOG_INF("RX2: target=%lld, now=%lld, freq=%u, dr=%u, to=%u",
-				rx2_target, now, rx2_freq, rx2_dr, rx2_timeout);
-			if (now < rx2_target) {
-				k_msleep(rx2_target - now);
-			}
-			rx_len = open_rx_window(rx2_freq, rx2_dr,
-						rx_buf, sizeof(rx_buf),
-						&rssi, &snr, rx2_timeout);
-		}
+		struct rx_window_config rx1_cfg = {
+			.freq = rx1_freq,
+			.dr = rx1_dr,
+			.timeout_ms = rx1_timeout,
+			.delay_ms = rx1_delay_ms,
+		};
+		struct rx_window_config rx2_cfg = {
+			.freq = rx2_freq,
+			.dr = rx2_dr,
+			.timeout_ms = rx2_timeout,
+			.delay_ms = rx2_delay_ms,
+		};
 
+		LOG_INF("RX1: target=%lld, freq=%u, dr=%u, to=%u",
+			tx_end_time + rx1_delay_ms, rx1_freq, rx1_dr, rx1_timeout);
+		LOG_INF("RX2: target=%lld, freq=%u, dr=%u, to=%u",
+			tx_end_time + rx2_delay_ms, rx2_freq, rx2_dr, rx2_timeout);
+
+		int rx_len = open_rx_windows(tx_end_time, &rx1_cfg, &rx2_cfg,
+					      rx_buf, sizeof(rx_buf), &rssi, &snr);
 		if (rx_len > 0) {
 			process_downlink(rx_buf, rx_len, rssi, snr,
 					 &confirmed_ack_received);
