@@ -44,6 +44,7 @@ struct region_ctx {
 	uint8_t rx1_delay_s;
 	uint8_t rx2_delay_s;
 	uint8_t default_tx_power;
+	uint8_t tx_power_map[8];    /* LinkADR power index 0-7 to dBm */
 	uint16_t max_tx_duty_cycle;  /* permille, e.g. 1000 = 100% */
 
 	/* MAC command validation limits (set per region) */

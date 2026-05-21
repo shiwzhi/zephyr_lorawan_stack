@@ -48,6 +48,14 @@ static void init_dr_table(struct region_ctx *ctx, uint8_t num_dr,
 	}
 }
 
+static void init_tx_power_map(struct region_ctx *ctx)
+{
+	for (uint8_t i = 0; i < 8; i++) {
+		int p = (int)ctx->default_tx_power - 2 * (int)i;
+		ctx->tx_power_map[i] = (p < 0) ? 0 : (uint8_t)p;
+	}
+}
+
 /* -------------------------------------------------------------------------- */
 /* EU868                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -61,6 +69,7 @@ static void region_setup_eu868(struct region_ctx *ctx)
 	ctx->rx1_delay_s = EU868_RX1_DELAY_S;
 	ctx->rx2_delay_s = EU868_RX2_DELAY_S;
 	ctx->default_tx_power = EU868_DEFAULT_TX_POWER;
+	init_tx_power_map(ctx);
 	ctx->max_tx_duty_cycle = EU868_TX_MAX_DUTY;
 	ctx->freq_min_hz = EU868_FREQ_MIN;
 	ctx->freq_max_hz = EU868_FREQ_MAX;
@@ -89,6 +98,7 @@ static void region_setup_us915(struct region_ctx *ctx)
 	ctx->rx1_delay_s = US915_RX1_DELAY_S;
 	ctx->rx2_delay_s = US915_RX2_DELAY_S;
 	ctx->default_tx_power = US915_DEFAULT_TX_POWER;
+	init_tx_power_map(ctx);
 	ctx->max_tx_duty_cycle = 0;
 	ctx->freq_min_hz = US915_FREQ_MIN;
 	ctx->freq_max_hz = US915_FREQ_MAX;
@@ -116,6 +126,7 @@ static void region_setup_au915(struct region_ctx *ctx)
 	ctx->rx1_delay_s = AU915_RX1_DELAY_S;
 	ctx->rx2_delay_s = AU915_RX2_DELAY_S;
 	ctx->default_tx_power = AU915_DEFAULT_TX_POWER;
+	init_tx_power_map(ctx);
 	ctx->max_tx_duty_cycle = 0;
 	ctx->freq_min_hz = AU915_FREQ_MIN;
 	ctx->freq_max_hz = AU915_FREQ_MAX;
@@ -139,7 +150,8 @@ static void region_setup_cn470(struct region_ctx *ctx)
 	ctx->rx2_dr = CN470_RX2_DR;
 	ctx->rx1_delay_s = CN470_RX1_DELAY_S;
 	ctx->rx2_delay_s = CN470_RX2_DELAY_S;
-	ctx->default_tx_power = 14;
+	ctx->default_tx_power = CN470_DEFAULT_TX_POWER;
+	init_tx_power_map(ctx);
 	ctx->max_tx_duty_cycle = 0;
 	ctx->freq_min_hz = CN470_FREQ_MIN;
 	ctx->freq_max_hz = CN470_FREQ_MAX;
@@ -159,6 +171,7 @@ static void region_setup_kr920(struct region_ctx *ctx)
 	ctx->rx1_delay_s = KR920_RX1_DELAY_S;
 	ctx->rx2_delay_s = KR920_RX2_DELAY_S;
 	ctx->default_tx_power = KR920_DEFAULT_TX_POWER;
+	init_tx_power_map(ctx);
 	ctx->max_tx_duty_cycle = KR920_TX_MAX_DUTY;
 	ctx->freq_min_hz = KR920_FREQ_MIN;
 	ctx->freq_max_hz = KR920_FREQ_MAX;
@@ -178,6 +191,7 @@ static void region_setup_in865(struct region_ctx *ctx)
 	ctx->rx1_delay_s = IN865_RX1_DELAY_S;
 	ctx->rx2_delay_s = IN865_RX2_DELAY_S;
 	ctx->default_tx_power = IN865_DEFAULT_TX_POWER;
+	init_tx_power_map(ctx);
 	ctx->max_tx_duty_cycle = 0;
 	ctx->freq_min_hz = IN865_FREQ_MIN;
 	ctx->freq_max_hz = IN865_FREQ_MAX;
@@ -197,6 +211,7 @@ static void region_setup_as923(struct region_ctx *ctx)
 	ctx->rx1_delay_s = AS923_RX1_DELAY_S;
 	ctx->rx2_delay_s = AS923_RX2_DELAY_S;
 	ctx->default_tx_power = AS923_DEFAULT_TX_POWER;
+	init_tx_power_map(ctx);
 	ctx->max_tx_duty_cycle = 0;
 	ctx->freq_min_hz = AS923_FREQ_MIN;
 	ctx->freq_max_hz = AS923_FREQ_MAX;
@@ -216,6 +231,7 @@ static void region_setup_cn779(struct region_ctx *ctx)
 	ctx->rx1_delay_s = CN779_RX1_DELAY_S;
 	ctx->rx2_delay_s = CN779_RX2_DELAY_S;
 	ctx->default_tx_power = CN779_DEFAULT_TX_POWER;
+	init_tx_power_map(ctx);
 	ctx->max_tx_duty_cycle = 0;
 	ctx->freq_min_hz = CN779_FREQ_MIN;
 	ctx->freq_max_hz = CN779_FREQ_MAX;
@@ -235,6 +251,7 @@ static void region_setup_ru864(struct region_ctx *ctx)
 	ctx->rx1_delay_s = RU864_RX1_DELAY_S;
 	ctx->rx2_delay_s = RU864_RX2_DELAY_S;
 	ctx->default_tx_power = RU864_DEFAULT_TX_POWER;
+	init_tx_power_map(ctx);
 	ctx->max_tx_duty_cycle = RU864_TX_MAX_DUTY;
 	ctx->freq_min_hz = RU864_FREQ_MIN;
 	ctx->freq_max_hz = RU864_FREQ_MAX;
@@ -379,12 +396,31 @@ const struct lorawan_channel *region_get_join_channel(const struct region_ctx *c
 
 int region_get_max_payload(const struct region_ctx *ctx, uint8_t dr)
 {
-	ARG_UNUSED(ctx);
-	if (dr >= LORAWAN_MAX_DR) {
-		return -EINVAL;
+	switch (ctx->region) {
+	case LORAWAN_REGION_CN470:
+		return cn470_get_max_payload(dr);
+	case LORAWAN_REGION_EU868:
+		return eu868_get_max_payload(dr);
+	case LORAWAN_REGION_US915:
+		return us915_get_max_payload(dr);
+	case LORAWAN_REGION_AU915:
+		return au915_get_max_payload(dr);
+	case LORAWAN_REGION_KR920:
+		return kr920_get_max_payload(dr);
+	case LORAWAN_REGION_IN865:
+		return in865_get_max_payload(dr);
+	case LORAWAN_REGION_AS923:
+		return as923_get_max_payload(dr);
+	case LORAWAN_REGION_CN779:
+		return cn779_get_max_payload(dr);
+	case LORAWAN_REGION_RU864:
+		return ru864_get_max_payload(dr);
+	default:
+		if (dr >= LORAWAN_MAX_DR) {
+			return -EINVAL;
+		}
+		return 50;
 	}
-	/* Default fallback - region-specific values should be used */
-	return 50;
 }
 
 uint32_t region_get_beacon_freq(uint32_t beacon_time)

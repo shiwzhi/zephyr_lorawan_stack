@@ -36,6 +36,12 @@ extern "C" {
 #define CN470_RX2_FREQ       505300000U
 #define CN470_RX2_DR         0
 
+/* CN470-510 default TX power (dBm) */
+#define CN470_DEFAULT_TX_POWER 14
+
+/* CN470-510 TX power map (LinkADR power index to dBm) */
+#define CN470_TX_POWER_MAP {19, 17, 15, 13, 11, 9, 7, 5}
+
 /* CN470-510 RX delay settings */
 #define CN470_RX1_DELAY_S    1
 #define CN470_RX2_DELAY_S    2

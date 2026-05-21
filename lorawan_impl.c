@@ -524,6 +524,7 @@ struct lorawan_ctx {
 	bool uplink_dwell_time;
 	bool downlink_dwell_time;
 	uint32_t max_eirp;
+	int8_t adr_power_index;    /* -1 = unset, 0-7 from LinkADRReq */
 	uint8_t adr_limit_exp;
 	uint8_t adr_delay_exp;
 	uint8_t rejoin_periodicity;
@@ -574,7 +575,7 @@ static int radio_configure_rx(uint32_t freq, uint8_t dr)
 		.frequency = freq,
 		.coding_rate = CR_4_5,
 		.preamble_len = 8,
-		.tx_power = 14,
+		.tx_power = g_ctx.region.default_tx_power,
 		.tx = false,
 		.iq_inverted = true,   /* LoRaWAN downlink uses inverted IQ */
 		.public_network = true,
@@ -589,13 +590,36 @@ static int radio_configure_rx(uint32_t freq, uint8_t dr)
 	return lora_config(lora_dev, &cfg);
 }
 
+static int8_t get_tx_power_dbm(void)
+{
+	int8_t dbm;
+
+	/* Start with region default */
+	dbm = (int8_t)g_ctx.region.default_tx_power;
+
+	/* Apply LinkADR power index if set */
+	if (g_ctx.adr_power_index >= 0 && g_ctx.adr_power_index < 8) {
+		dbm = (int8_t)g_ctx.region.tx_power_map[g_ctx.adr_power_index];
+	}
+
+	/* Apply TxParamSetupReq max_eirp ceiling if set */
+	if (g_ctx.max_eirp > 0) {
+		int8_t ceiling = (int8_t)(6 + 2 * g_ctx.max_eirp);
+		if (dbm > ceiling) {
+			dbm = ceiling;
+		}
+	}
+
+	return dbm;
+}
+
 static int radio_configure_tx(uint32_t freq, uint8_t dr)
 {
 	struct lora_modem_config cfg = {
 		.frequency = freq,
 		.coding_rate = CR_4_5,
 		.preamble_len = 8,
-		.tx_power = 14,
+		.tx_power = get_tx_power_dbm(),
 		.tx = true,
 		.iq_inverted = false,  /* LoRaWAN uplink uses normal IQ */
 		.public_network = true,
@@ -607,6 +631,8 @@ static int radio_configure_tx(uint32_t freq, uint8_t dr)
 		LOG_ERR("region_dr_to_lora failed: dr=%u, ret=%d", dr, ret);
 		return ret;
 	}
+
+	LOG_DBG("TX: freq=%u, dr=%u, power=%d dBm", freq, dr, cfg.tx_power);
 
 	ret = lora_config(lora_dev, &cfg);
 	if (ret < 0) {
@@ -756,6 +782,9 @@ static void process_mac_commands(const uint8_t *payload, size_t len)
 				if (status == 0x07) {
 					if (dr != 0x0F) {
 						g_ctx.current_dr = dr;
+					}
+					if (power != 0x0F && power <= 7) {
+						g_ctx.adr_power_index = (int8_t)power;
 						if (g_ctx.dr_changed_cb) {
 							g_ctx.dr_changed_cb(g_ctx.current_dr);
 						}
@@ -1422,6 +1451,7 @@ int lorawan_start(void)
 	g_ctx.rx1_dr_offset = 0;
 	g_ctx.max_duty_cycle = 0;
 	g_ctx.max_eirp = 0;
+	g_ctx.adr_power_index = -1;
 	g_ctx.uplink_dwell_time = false;
 	g_ctx.downlink_dwell_time = false;
 
