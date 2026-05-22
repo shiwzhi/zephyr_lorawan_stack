@@ -91,13 +91,6 @@ int radio_configure_tx(uint32_t freq, uint8_t dr)
 	return ret;
 }
 
-void memcpyr(uint8_t *dst, const uint8_t *src, uint8_t len)
-{
-	for (uint8_t i = 0; i < len; i++) {
-		dst[i] = src[len - 1 - i];
-	}
-}
-
 void build_fhdr(uint8_t *buf, uint32_t dev_addr, uint8_t fctrl, uint16_t fcnt)
 {
 	buf[0] = dev_addr & 0xFF;

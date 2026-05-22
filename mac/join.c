@@ -16,9 +16,9 @@ int send_join_request(uint8_t *rx_buf, size_t rx_buflen)
 	int ret;
 
 	*p++ = MHDR_JOIN_REQUEST;
-	memcpyr(p, g_ctx.join_eui, 8);
+	lorawan_memcpy_rev(p, g_ctx.join_eui, 8);
 	p += 8;
-	memcpyr(p, g_ctx.dev_eui, 8);
+	lorawan_memcpy_rev(p, g_ctx.dev_eui, 8);
 	p += 8;
 	*p++ = g_ctx.dev_nonce & 0xFF;
 	*p++ = (g_ctx.dev_nonce >> 8) & 0xFF;
