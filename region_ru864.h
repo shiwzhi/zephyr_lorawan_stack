@@ -69,6 +69,28 @@ static inline int ru864_get_max_payload(uint8_t dr)
 	return ru864_max_payload[dr];
 }
 
+static inline int ru864_apply_cflist(struct region_ctx *ctx, const uint8_t cflist[16])
+{
+	if (cflist[15] != 0) {
+		return -EINVAL;
+	}
+	for (int i = 0; i < 5; i++) {
+		uint32_t freq = ((uint32_t)cflist[i * 3] << 16) |
+				((uint32_t)cflist[i * 3 + 1] << 8) |
+				(uint32_t)cflist[i * 3 + 2];
+		freq *= 100;
+		if (freq < RU864_FREQ_MIN || freq > RU864_FREQ_MAX) {
+			continue;
+		}
+		uint8_t idx = 2 + i;
+		ctx->channels[idx].freq_hz = freq;
+		ctx->channels[idx].min_dr = 0;
+		ctx->channels[idx].max_dr = RU864_NUM_DR - 1;
+		ctx->channels[idx].enabled = true;
+	}
+	return 0;
+}
+
 #ifdef __cplusplus
 }
 #endif

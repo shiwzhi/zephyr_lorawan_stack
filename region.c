@@ -457,3 +457,29 @@ uint16_t region_get_rx_window_timeout_ms(const struct region_ctx *ctx, uint8_t d
 		return 1550;
 	}
 }
+
+int region_apply_cflist(struct region_ctx *ctx, const uint8_t cflist[16])
+{
+	switch (ctx->region) {
+	case LORAWAN_REGION_CN470:
+		return cn470_apply_cflist(ctx, cflist);
+	case LORAWAN_REGION_EU868:
+		return eu868_apply_cflist(ctx, cflist);
+	case LORAWAN_REGION_US915:
+		return us915_apply_cflist(ctx, cflist);
+	case LORAWAN_REGION_AU915:
+		return au915_apply_cflist(ctx, cflist);
+	case LORAWAN_REGION_KR920:
+		return kr920_apply_cflist(ctx, cflist);
+	case LORAWAN_REGION_IN865:
+		return in865_apply_cflist(ctx, cflist);
+	case LORAWAN_REGION_AS923:
+		return as923_apply_cflist(ctx, cflist);
+	case LORAWAN_REGION_CN779:
+		return cn779_apply_cflist(ctx, cflist);
+	case LORAWAN_REGION_RU864:
+		return ru864_apply_cflist(ctx, cflist);
+	default:
+		return -EINVAL;
+	}
+}

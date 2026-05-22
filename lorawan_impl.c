@@ -1196,7 +1196,7 @@ static void process_downlink(uint8_t *phy, size_t len, int16_t rssi,
 /* RX window configuration & helpers                                          */
 /* -------------------------------------------------------------------------- */
 
-#define RX_EARLY_MS             1   /* Open RX windows early to cover radio setup */
+#define RX_EARLY_MS             50   /* Open RX windows early to cover radio setup */
 
 struct rx_window_config {
 	uint32_t freq;
@@ -1426,6 +1426,22 @@ int lorawan_join(const struct lorawan_join_config *config)
 		dev_addr = ((uint32_t)ja[6]) | (((uint32_t)ja[7]) << 8) |
 			   (((uint32_t)ja[8]) << 16) | (((uint32_t)ja[9]) << 24);
 
+		/* DLSettings: RX1 DR offset + RX2 DR */
+		g_ctx.rx1_dr_offset = (ja[10] >> 4) & 0x07;
+		uint8_t rx2_dr = ja[10] & 0x0F;
+		if (rx2_dr < g_ctx.region.num_dr) {
+			g_ctx.rx2_dr_override = rx2_dr;
+		}
+
+		/* RXDelay */
+		uint8_t rx_delay = ja[11];
+		g_ctx.rx_timing_delay = (rx_delay == 0) ? 1 : rx_delay;
+
+		/* CFList (optional, present when rx_len >= 33) */
+		if (rx_len >= 33) {
+			region_apply_cflist(&g_ctx.region, ja + 12);
+		}
+
 		g_ctx.dev_addr = dev_addr;
 		lorawan_derive_session_keys(g_ctx.app_key, join_nonce, net_id,
 					    dev_nonce_le, g_ctx.nwk_skey,
@@ -1512,8 +1528,6 @@ int lorawan_start(void)
 		 * widely used in Zephyr 4.4 and will be updated when
 		 * the flash_map API stabilizes.
 		 */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
 		rc = flash_get_page_info_by_offs(flash_dev, fs.offset, &info);
 		if (rc == 0) {
@@ -1542,7 +1556,6 @@ int lorawan_start(void)
 	} else {
 		LOG_ERR("MTD flash device not ready inside stack for persistent storage");
 	}
-#pragma GCC diagnostic pop
 
 	k_mutex_unlock(&lorawan_mutex);
 
@@ -1741,9 +1754,9 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len,
 			.delay_ms = rx2_delay_ms,
 		};
 
-		LOG_INF("RX1: target=%lld, freq=%u, dr=%u, to=%u",
+		LOG_DBG("RX1: target=%lld, freq=%u, dr=%u, to=%u",
 			tx_end_time + rx1_delay_ms, rx1_freq, rx1_dr, rx1_timeout);
-		LOG_INF("RX2: target=%lld, freq=%u, dr=%u, to=%u",
+		LOG_DBG("RX2: target=%lld, freq=%u, dr=%u, to=%u",
 			tx_end_time + rx2_delay_ms, rx2_freq, rx2_dr, rx2_timeout);
 
 		int rx_len = open_rx_windows(tx_end_time, &rx1_cfg, &rx2_cfg,
