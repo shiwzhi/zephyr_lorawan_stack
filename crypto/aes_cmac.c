@@ -1,5 +1,6 @@
 #include "aes_cmac.h"
 #include "aes128.h"
+#include <stdbool.h>
 
 static const uint8_t rb[16] = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
