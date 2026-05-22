@@ -98,18 +98,7 @@ static inline int au915_get_max_payload(uint8_t dr)
 
 static inline int au915_apply_cflist(struct region_ctx *ctx, const uint8_t cflist[16])
 {
-	if (cflist[15] != 1) {
-		return -EINVAL;
-	}
-	for (uint8_t block = 0; block < 6; block++) {
-		uint16_t mask = (uint16_t)cflist[block * 2] |
-			       ((uint16_t)cflist[block * 2 + 1] << 8);
-		int start = block * 16;
-		for (int c = start; c < start + 16 && c < ctx->num_channels; c++) {
-			ctx->channels[c].enabled = (mask & (1 << (c - start))) ? true : false;
-		}
-	}
-	return 0;
+	return region_cflist_type_b(ctx, cflist);
 }
 
 #ifdef __cplusplus

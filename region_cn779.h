@@ -74,30 +74,8 @@ static inline int cn779_get_max_payload(uint8_t dr)
 
 static inline int cn779_apply_cflist(struct region_ctx *ctx, const uint8_t cflist[16])
 {
-	if (cflist[15] != 0) {
-		return -EINVAL;
-	}
-	for (int i = 0; i < 5; i++) {
-		uint32_t freq = ((uint32_t)cflist[i * 3] << 16) |
-				((uint32_t)cflist[i * 3 + 1] << 8) |
-				(uint32_t)cflist[i * 3 + 2];
-		freq *= 100;
-		if (freq < CN779_FREQ_MIN || freq > CN779_FREQ_MAX) {
-			continue;
-		}
-		uint8_t idx = 3 + i;
-		ctx->channels[idx].freq_hz = freq;
-		ctx->channels[idx].min_dr = 0;
-		ctx->channels[idx].max_dr = CN779_NUM_DR - 1;
-		ctx->channels[idx].enabled = true;
-	}
-	if (ctx->num_channels < 8) {
-		ctx->num_channels = 8;
-	}
-	if (ctx->max_channels < 8) {
-		ctx->max_channels = 8;
-	}
-	return 0;
+	return region_cflist_type_a(ctx, cflist, 3, CN779_FREQ_MIN, CN779_FREQ_MAX,
+				    CN779_NUM_DR, 8);
 }
 
 #ifdef __cplusplus

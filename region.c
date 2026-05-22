@@ -483,3 +483,51 @@ int region_apply_cflist(struct region_ctx *ctx, const uint8_t cflist[16])
 		return -EINVAL;
 	}
 }
+
+int region_cflist_type_a(struct region_ctx *ctx, const uint8_t cflist[16],
+			  uint8_t start_idx, uint32_t freq_min, uint32_t freq_max,
+			  uint8_t num_dr, uint8_t min_channels)
+{
+	if (cflist[15] != 0) {
+		return -EINVAL;
+	}
+	for (int i = 0; i < 5; i++) {
+		uint32_t freq = ((uint32_t)cflist[i * 3] << 16) |
+				((uint32_t)cflist[i * 3 + 1] << 8) |
+				(uint32_t)cflist[i * 3 + 2];
+		freq *= 100;
+		if (freq < freq_min || freq > freq_max) {
+			continue;
+		}
+		uint8_t idx = start_idx + i;
+		ctx->channels[idx].freq_hz = freq;
+		ctx->channels[idx].min_dr = 0;
+		ctx->channels[idx].max_dr = num_dr - 1;
+		ctx->channels[idx].enabled = true;
+	}
+	if (min_channels > 0) {
+		if (ctx->num_channels < min_channels) {
+			ctx->num_channels = min_channels;
+		}
+		if (ctx->max_channels < min_channels) {
+			ctx->max_channels = min_channels;
+		}
+	}
+	return 0;
+}
+
+int region_cflist_type_b(struct region_ctx *ctx, const uint8_t cflist[16])
+{
+	if (cflist[15] != 1) {
+		return -EINVAL;
+	}
+	for (uint8_t block = 0; block < 6; block++) {
+		uint16_t mask = (uint16_t)cflist[block * 2] |
+			       ((uint16_t)cflist[block * 2 + 1] << 8);
+		int start = block * 16;
+		for (int c = start; c < start + 16 && c < ctx->num_channels; c++) {
+			ctx->channels[c].enabled = (mask & (1 << (c - start))) ? true : false;
+		}
+	}
+	return 0;
+}

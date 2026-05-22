@@ -4,6 +4,14 @@
 add_library(lorawan STATIC
     lorawan_impl.c
     region.c
+    crypto/aes128.c
+    crypto/aes_cmac.c
+    crypto/lorawan_crypto.c
+    radio/radio_hal.c
+    mac/mac_commands.c
+    mac/downlink.c
+    mac/rx.c
+    mac/join.c
     region_cn470.c
     region_eu868.c
     region_us915.c

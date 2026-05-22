@@ -71,24 +71,8 @@ static inline int kr920_get_max_payload(uint8_t dr)
 
 static inline int kr920_apply_cflist(struct region_ctx *ctx, const uint8_t cflist[16])
 {
-	if (cflist[15] != 0) {
-		return -EINVAL;
-	}
-	for (int i = 0; i < 5; i++) {
-		uint32_t freq = ((uint32_t)cflist[i * 3] << 16) |
-				((uint32_t)cflist[i * 3 + 1] << 8) |
-				(uint32_t)cflist[i * 3 + 2];
-		freq *= 100;
-		if (freq < KR920_FREQ_MIN || freq > KR920_FREQ_MAX) {
-			continue;
-		}
-		uint8_t idx = 3 + i;
-		ctx->channels[idx].freq_hz = freq;
-		ctx->channels[idx].min_dr = 0;
-		ctx->channels[idx].max_dr = KR920_NUM_DR - 1;
-		ctx->channels[idx].enabled = true;
-	}
-	return 0;
+	return region_cflist_type_a(ctx, cflist, 3, KR920_FREQ_MIN, KR920_FREQ_MAX,
+				    KR920_NUM_DR, 0);
 }
 
 #ifdef __cplusplus

@@ -65,6 +65,12 @@ uint32_t region_get_beacon_freq(uint32_t beacon_time);
 uint16_t region_get_rx_window_timeout_ms(const struct region_ctx *ctx, uint8_t dr);
 int region_apply_cflist(struct region_ctx *ctx, const uint8_t cflist[16]);
 
+/* Shared CFList helpers used by per-region implementations */
+int region_cflist_type_a(struct region_ctx *ctx, const uint8_t cflist[16],
+			  uint8_t start_idx, uint32_t freq_min, uint32_t freq_max,
+			  uint8_t num_dr, uint8_t min_channels);
+int region_cflist_type_b(struct region_ctx *ctx, const uint8_t cflist[16]);
+
 #ifdef __cplusplus
 }
 #endif
