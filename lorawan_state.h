@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include "region.h"
+#include "region/region.h"
 
 #define MAX_PHY_PAYLOAD 255
 #define RX1_DELAY_S     1

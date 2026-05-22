@@ -1,7 +1,7 @@
 #include "rx.h"
 #include "../lorawan_state.h"
 #include "../radio/radio_hal.h"
-#include "../region.h"
+#include "../region/region.h"
 #include <zephyr/drivers/lora.h>
 #include <zephyr/logging/log.h>
 

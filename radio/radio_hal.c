@@ -1,6 +1,6 @@
 #include "radio_hal.h"
 #include "../lorawan_state.h"
-#include "../region.h"
+#include "../region/region.h"
 #include <zephyr/drivers/lora.h>
 #include <zephyr/logging/log.h>
 

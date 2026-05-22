@@ -1,6 +1,6 @@
 #include "mac_commands.h"
 #include "../lorawan_state.h"
-#include "../region.h"
+#include "../region/region.h"
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_DECLARE(lorawan, CONFIG_LOG_DEFAULT_LEVEL);

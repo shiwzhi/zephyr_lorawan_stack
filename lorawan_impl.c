@@ -19,7 +19,7 @@
 #include <zephyr/kvss/nvs.h>
 #include <zephyr/drivers/flash.h>
 #include <zephyr/storage/flash_map.h>
-#include "region.h"
+#include "region/region.h"
 #include "lorawan_state.h"
 #include "crypto/lorawan_crypto.h"
 #include "radio/radio_hal.h"

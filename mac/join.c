@@ -1,7 +1,7 @@
 #include "join.h"
 #include "rx.h"
 #include "../lorawan_state.h"
-#include "../region.h"
+#include "../region/region.h"
 #include "../radio/radio_hal.h"
 #include "../crypto/lorawan_crypto.h"
 #include <zephyr/drivers/lora.h>

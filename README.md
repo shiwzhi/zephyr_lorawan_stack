@@ -5,28 +5,28 @@ A standalone LoRaWAN Class A end-device stack implementing the API declared in `
 ## Architecture
 
 ```
-lorawan_impl.c    → LoRaWAN MAC layer (join, send, receive, MIC, encryption)
-region.h / .c     → Region abstraction dispatcher
-region_*.h / .c   → Per-region parameters (DR tables, frequencies, payload limits)
+lorawan_impl.c           → LoRaWAN MAC layer (join, send, receive, MIC, encryption)
+region/region.h / .c     → Region abstraction dispatcher
+region/region_*.h / .c   → Per-region parameters (DR tables, frequencies, payload limits)
 ```
 
 | File | Purpose |
 |------|---------|
 | `lorawan_impl.c` | Full LoRaWAN stack: OTAA join, uplink/downlink frames, AES-128 encryption, AES-CMAC MIC, RX1/RX2 windows, MAC command processing |
-| `region.c` | Dispatches to region-specific implementations based on `enum lorawan_region` |
-| `region_cn470.c/h` | CN470-510 (China) — 96 uplink channels, DR0–DR5 |
-| `region_eu868.c/h` | EU868 (Europe) — 3 default channels, DR0–DR6 |
-| `region_us915.c/h` | US915 (US) — 72 uplink channels, DR0–DR9 |
-| `region_au915.c/h` | AU915 (Australia) — 72 uplink channels, DR0–DR9 |
-| `region_kr920.c/h` | KR920 (Korea) — 8 channels, DR0–DR4 |
-| `region_in865.c/h` | IN865 (India) — 3 channels, DR0–DR5 |
-| `region_as923.c/h` | AS923 (Asia) — 8 channels, DR0–DR5 |
-| `region_cn779.c/h` | CN779-787 (China) — 3 channels, DR0–DR5 |
-| `region_ru864.c/h` | RU864 (Russia) — 8 channels, DR0–DR5 |
+| `region/region.c` | Dispatches to region-specific implementations based on `enum lorawan_region` |
+| `region/region_cn470.c/h` | CN470-510 (China) — 96 uplink channels, DR0–DR5 |
+| `region/region_eu868.c/h` | EU868 (Europe) — 3 default channels, DR0–DR6 |
+| `region/region_us915.c/h` | US915 (US) — 72 uplink channels, DR0–DR9 |
+| `region/region_au915.c/h` | AU915 (Australia) — 72 uplink channels, DR0–DR9 |
+| `region/region_kr920.c/h` | KR920 (Korea) — 8 channels, DR0–DR4 |
+| `region/region_in865.c/h` | IN865 (India) — 3 channels, DR0–DR5 |
+| `region/region_as923.c/h` | AS923 (Asia) — 8 channels, DR0–DR5 |
+| `region/region_cn779.c/h` | CN779-787 (China) — 3 channels, DR0–DR5 |
+| `region/region_ru864.c/h` | RU864 (Russia) — 8 channels, DR0–DR5 |
 
 ## Key Features
 
-- **LoRaWAN 1.0.4 / 1.1+ compatible** — uses a single `app_key` for all join and session key derivation (1.0.4 style). The stack derives both `NwkSKey` (`0x01`) and `AppSKey` (`0x02`) from the root `AppKey`.
+- **LoRaWAN 1.0.4 compatible** — uses a single `app_key` for all join and session key derivation (1.0.4 style). The stack derives both `NwkSKey` (`0x01`) and `AppSKey` (`0x02`) from the root `AppKey`.
 - **OTAA only** — join via Over-The-Air Activation; ABP is also supported.
 - **Class A** — bidirectional end-device with two receive windows (RX1, RX2) after each uplink.
 - **AES-128 from scratch** — standalone AES-128 encrypt + AES-CMAC (RFC4493), no external crypto library.
@@ -45,7 +45,7 @@ region_*.h / .c   → Per-region parameters (DR tables, frequencies, payload lim
 - Frequency band limits (`freq_min_hz`, `freq_max_hz`)
 - Max channel count (`max_channels`)
 
-Each `region_*.c` file fills this struct with region-specific values. Adding a new region requires a new header/source pair and a case in `region_init()`.
+Each `region/region_*.c` file fills this struct with region-specific values. Adding a new region requires a new header/source pair and a case in `region_init()`.
 
 ## Dependencies
 
