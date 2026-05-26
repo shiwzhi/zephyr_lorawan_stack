@@ -51,6 +51,10 @@ struct region_ctx {
 	uint32_t freq_min_hz;    /* Minimum valid frequency */
 	uint32_t freq_max_hz;    /* Maximum valid frequency */
 	uint16_t max_channels;   /* Number of channel entries */
+
+	/* Class C RXC parameters (defaults to RX2 values) */
+	uint32_t rxc_freq;
+	uint8_t  rxc_dr;
 };
 
 void region_init(struct region_ctx *ctx, enum lorawan_region region);

@@ -49,10 +49,16 @@ enum lorawan_state {
 	STATE_JOINED,
 };
 
-struct lorawan_ctx {
+#define CLASS_C_RESP_TIMEOUT_MS 8000
+
+	struct lorawan_ctx {
 	bool started;
 	enum lorawan_state state;
 	enum lorawan_class dev_class;
+	bool class_c_active;
+	bool class_c_paused;
+	struct k_sem class_c_pause_sem;
+	struct k_work_delayable class_c_ack_work;
 	uint8_t last_tx_channel;
 
 	uint8_t dev_eui[8];

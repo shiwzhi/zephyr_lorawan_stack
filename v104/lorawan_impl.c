@@ -2,7 +2,7 @@
  * Copyright (c) 2025
  * SPDX-License-Identifier: Apache-2.0
  *
- * Custom LoRaWAN Class A end-device stack.
+ * Custom LoRaWAN Class A/C end-device stack.
  * Implements the API declared in <zephyr/lorawan/lorawan.h>
  * using the raw Zephyr LoRa driver (<zephyr/drivers/lora.h>).
  *
@@ -47,6 +47,96 @@ const struct device *lora_dev = LORA_DEV;
 struct nvs_fs fs;
 bool storage_initialized = false;
 K_MUTEX_DEFINE(lorawan_mutex);
+
+/* Class C continuous RX2 receive thread */
+static K_THREAD_STACK_DEFINE(class_c_stack, 2048);
+static struct k_thread class_c_thread_data;
+static k_tid_t class_c_tid;
+static struct k_sem class_c_data_sem;
+static uint8_t class_c_rx_buf[MAX_PHY_PAYLOAD];
+static int class_c_rx_len;
+static int16_t class_c_rssi;
+static int8_t class_c_snr;
+
+static void class_c_rx_cb(const struct device *dev, uint8_t *data,
+			  uint16_t size, int16_t rssi, int8_t snr,
+			  void *user_data)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(user_data);
+
+	if (size > 0 && g_ctx.class_c_active && !g_ctx.class_c_paused) {
+		memcpy(class_c_rx_buf, data, size);
+		class_c_rx_len = size;
+		class_c_rssi = rssi;
+		class_c_snr = snr;
+		k_sem_give(&class_c_data_sem);
+	}
+}
+
+static void class_c_rx_thread(void *p1, void *p2, void *p3)
+{
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
+
+	while (1) {
+		while (!g_ctx.class_c_active || g_ctx.class_c_paused) {
+			k_sleep(K_MSEC(100));
+		}
+
+		uint32_t rx2_freq = (g_ctx.region.rxc_freq != 0) ?
+				    g_ctx.region.rxc_freq : get_rx2_freq();
+		uint8_t rx2_dr = (g_ctx.region.rxc_dr != 0xFF) ?
+				 g_ctx.region.rxc_dr : get_rx2_dr();
+
+		int ret = radio_configure_rx(rx2_freq, rx2_dr);
+		if (ret < 0) {
+			LOG_ERR("Class C RX config failed: %d", ret);
+			k_msleep(1000);
+			continue;
+		}
+
+		class_c_rx_len = 0;
+		ret = lora_recv_async(lora_dev, class_c_rx_cb, NULL);
+		if (ret < 0) {
+			LOG_ERR("Class C recv_async failed: %d", ret);
+			k_msleep(1000);
+			continue;
+		}
+
+		k_sem_take(&class_c_data_sem, K_FOREVER);
+
+		lora_recv_async(lora_dev, NULL, NULL);
+
+		if (!g_ctx.class_c_active || g_ctx.class_c_paused) {
+			continue;
+		}
+
+		if (class_c_rx_len > 0) {
+			k_mutex_lock(&lorawan_mutex, K_FOREVER);
+			LOG_INF("Class C downlink received (%d bytes)", class_c_rx_len);
+			bool ack = false;
+			process_downlink(class_c_rx_buf, class_c_rx_len,
+					 class_c_rssi, class_c_snr, &ack, true);
+			if (ack) {
+				k_work_schedule(&g_ctx.class_c_ack_work,
+						K_MSEC(100));
+			}
+			k_mutex_unlock(&lorawan_mutex);
+		}
+	}
+}
+
+static void class_c_ack_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+	LOG_INF("Class C ack work: sending immediate uplink ACK");
+	int ret = lorawan_send(0, NULL, 0, LORAWAN_MSG_UNCONFIRMED);
+	if (ret < 0) {
+		LOG_ERR("Class C ACK uplink failed: %d", ret);
+	}
+}
 
 /* -------------------------------------------------------------------------- */
 /* API implementation                                                          */
@@ -144,6 +234,8 @@ int lorawan_join(const struct lorawan_join_config *config)
 		if (rx2_dr < g_ctx.region.num_dr) {
 			g_ctx.rx2_dr_override = rx2_dr;
 		}
+		LOG_INF("JoinAccept DLSettings: RX1 DR offset=%u, RX2 DR=%u",
+			g_ctx.rx1_dr_offset, rx2_dr);
 
 		uint8_t rx_delay = ja[11];
 		g_ctx.rx_timing_delay = (rx_delay == 0) ? 1 : rx_delay;
@@ -206,6 +298,8 @@ int lorawan_start(void)
 
 	g_ctx.started = true;
 	g_ctx.dev_class = LORAWAN_CLASS_A;
+	k_sem_init(&class_c_data_sem, 0, 1);
+	k_work_init_delayable(&g_ctx.class_c_ack_work, class_c_ack_work_handler);
 	g_ctx.current_dr = LORAWAN_DR_0;
 	g_ctx.default_dr = LORAWAN_DR_0;
 	g_ctx.join_dr = LORAWAN_DR_0;
@@ -276,6 +370,7 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len,
 	bool confirmed = (type == LORAWAN_MSG_CONFIRMED);
 	bool sent_downlink_ack = false;
 	bool confirmed_ack_received = false;
+	bool was_class_c = false;
 
 	if (len > 0 && port == 0) {
 		return -EINVAL;
@@ -296,6 +391,14 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len,
 	}
 
 	append_uplink_mac_cmds();
+
+	/* Pause Class C continuous RX before TX */
+	was_class_c = (g_ctx.dev_class == LORAWAN_CLASS_C && g_ctx.class_c_active);
+	if (was_class_c) {
+		g_ctx.class_c_paused = true;
+		k_sem_give(&class_c_data_sem);
+		k_msleep(100);
+	}
 
 	if (g_ctx.adr_enabled) {
 		fctrl |= FCTRL_ADR;
@@ -349,6 +452,11 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len,
 	if (ret < 0) {
 		goto out;
 	}
+	LOG_INF("TX: freq=%u, SF=%d, BW=%d kHz, power=%d dBm",
+		ch->freq_hz,
+		g_ctx.region.dr_table[g_ctx.current_dr].datarate,
+		g_ctx.region.dr_table[g_ctx.current_dr].bandwidth,
+		get_tx_power_dbm());
 
 	uint8_t rx1_dr = 0;
 	uint32_t rx1_freq = 0;
@@ -360,7 +468,8 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len,
 	int64_t rx2_delay_ms = 0;
 	bool open_rx = false;
 
-	if (g_ctx.dev_class == LORAWAN_CLASS_A) {
+	if (g_ctx.dev_class == LORAWAN_CLASS_A ||
+	    g_ctx.dev_class == LORAWAN_CLASS_C) {
 		rx1_dr = region_get_rx1_dr(&g_ctx.region,
 					   g_ctx.current_dr, g_ctx.rx1_dr_offset);
 		rx1_freq = region_get_rx1_freq(&g_ctx.region,
@@ -374,6 +483,14 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len,
 		rx1_delay_ms = rx1_delay * 1000 - RX_EARLY_MS;
 		rx2_delay_ms = (rx1_delay + 1) * 1000 - RX_EARLY_MS;
 		open_rx = true;
+		LOG_INF("RX1: freq=%u, SF=%d, BW=%d kHz",
+			rx1_freq,
+			g_ctx.region.dr_table[rx1_dr].datarate,
+			g_ctx.region.dr_table[rx1_dr].bandwidth);
+		LOG_INF("RX2: freq=%u, SF=%d, BW=%d kHz",
+			rx2_freq,
+			g_ctx.region.dr_table[rx2_dr].datarate,
+			g_ctx.region.dr_table[rx2_dr].bandwidth);
 	}
 
 	ret = lora_send(lora_dev, tx_buf, phy_len);
@@ -428,7 +545,7 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len,
 					      rx_buf, sizeof(rx_buf), &rssi, &snr);
 		if (rx_len > 0) {
 			process_downlink(rx_buf, rx_len, rssi, snr,
-					 &confirmed_ack_received);
+					 &confirmed_ack_received, false);
 		}
 	}
 
@@ -437,6 +554,11 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len,
 	}
 
 out:
+	/* Resume Class C continuous RX after TX+RX windows */
+	if (was_class_c) {
+		g_ctx.class_c_paused = false;
+	}
+
 	k_mutex_unlock(&lorawan_mutex);
 	return ret;
 }
@@ -447,7 +569,35 @@ int lorawan_set_class(enum lorawan_class dev_class)
 		LOG_ERR("Class B not supported");
 		return -ENOTSUP;
 	}
-	g_ctx.dev_class = dev_class;
+
+	if (dev_class == g_ctx.dev_class) {
+		return 0;
+	}
+
+	if (dev_class == LORAWAN_CLASS_C) {
+		g_ctx.class_c_active = true;
+		g_ctx.class_c_paused = false;
+		g_ctx.dev_class = LORAWAN_CLASS_C;
+
+		class_c_tid = k_thread_create(
+			&class_c_thread_data, class_c_stack,
+			K_THREAD_STACK_SIZEOF(class_c_stack),
+			class_c_rx_thread, NULL, NULL, NULL,
+			K_PRIO_PREEMPT(8), 0, K_NO_WAIT);
+		k_thread_name_set(class_c_tid, "lorawan_class_c");
+
+		LOG_INF("Switched to Class C (continuous RX listening)");
+	} else {
+		g_ctx.class_c_active = false;
+		g_ctx.class_c_paused = true;
+		k_sem_give(&class_c_data_sem);
+		k_msleep(200);
+		k_thread_abort(class_c_tid);
+
+		g_ctx.dev_class = LORAWAN_CLASS_A;
+		LOG_INF("Switched to Class A");
+	}
+
 	return 0;
 }
 

@@ -1,6 +1,6 @@
 #include "mac_commands.h"
-#include "../lorawan_state.h"
-#include "../region/region.h"
+#include "lorawan_state.h"
+#include "region/region.h"
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_DECLARE(lorawan, CONFIG_LOG_DEFAULT_LEVEL);
@@ -13,22 +13,6 @@ void process_mac_commands(const uint8_t *payload, size_t len)
 		uint8_t cid = payload[i++];
 
 		switch (cid) {
-		case 0x01: {
-			if (i + 1 <= len) {
-				uint8_t serv_version = payload[i++] & 0x0F;
-				if (serv_version == g_ctx.minor_version) {
-					g_ctx.state = STATE_IDLE;
-					LOG_INF("ResetConf accepted (version=%u), rejoining",
-						serv_version);
-				} else {
-					LOG_WRN("ResetConf version mismatch: server=%u, local=%u",
-						serv_version, g_ctx.minor_version);
-				}
-			} else {
-				return;
-			}
-			break;
-		}
 		case 0x02: {
 			if (i + 2 <= len) {
 				uint8_t margin = payload[i++];
@@ -158,12 +142,12 @@ void process_mac_commands(const uint8_t *payload, size_t len)
 				}
 
 				if (status == 0x03) {
-				g_ctx.rx1_dr_offset = rx1_dr_offset;
-				g_ctx.rx2_freq_override = freq_hz;
-				g_ctx.rx2_dr_override = rx2_dr;
-				LOG_INF("RXParamSetupReq applied: RX2 freq=%u, DR=%u, offset=%u",
-					freq_hz, rx2_dr, rx1_dr_offset);
-			}
+					g_ctx.rx1_dr_offset = rx1_dr_offset;
+					g_ctx.rx2_freq_override = freq_hz;
+					g_ctx.rx2_dr_override = rx2_dr;
+					LOG_INF("RXParamSetupReq applied: RX2 freq=%u, DR=%u, offset=%u",
+						freq_hz, rx2_dr, rx1_dr_offset);
+				}
 
 				if (g_ctx.mac_rsp_len + 2 <= sizeof(g_ctx.mac_rsp_buf)) {
 					g_ctx.mac_rsp_buf[g_ctx.mac_rsp_len++] = 0x05;
@@ -300,22 +284,6 @@ void process_mac_commands(const uint8_t *payload, size_t len)
 			}
 			break;
 		}
-		case 0x0C: {
-			if (i + 1 <= len) {
-				uint8_t param = payload[i++];
-				g_ctx.adr_limit_exp = (param >> 4) & 0x0F;
-				g_ctx.adr_delay_exp = param & 0x0F;
-				LOG_INF("ADRParamSetupReq: LimitExp=%u, DelayExp=%u",
-					g_ctx.adr_limit_exp,
-					g_ctx.adr_delay_exp);
-			} else {
-				return;
-			}
-			if (g_ctx.mac_rsp_len + 1 <= sizeof(g_ctx.mac_rsp_buf)) {
-				g_ctx.mac_rsp_buf[g_ctx.mac_rsp_len++] = 0x0C;
-			}
-			break;
-		}
 		case 0x0D: {
 			if (i + 5 <= len) {
 				uint32_t seconds = ((uint32_t)payload[i++]);
@@ -333,44 +301,6 @@ void process_mac_commands(const uint8_t *payload, size_t len)
 			}
 			break;
 		}
-		case 0x0E: {
-			if (i + 2 <= len) {
-				uint16_t rejoin_req = ((uint16_t)payload[i++]);
-				rejoin_req |= ((uint16_t)payload[i++] << 8);
-
-				g_ctx.rejoin_periodicity = rejoin_req & 0x07;
-				g_ctx.rejoin_max_count = (rejoin_req >> 3) & 0x07;
-				uint8_t rejoin_dr = (rejoin_req >> 7) & 0x1F;
-
-				LOG_WRN("ForceRejoinReq: period=%u, maxRetries=%u, DR=%u",
-					g_ctx.rejoin_periodicity,
-					g_ctx.rejoin_max_count, rejoin_dr);
-
-				g_ctx.state = STATE_IDLE;
-				LOG_INF("Forced rejoin triggered");
-			} else {
-				return;
-			}
-			break;
-		}
-		case 0x0F: {
-			if (i + 1 <= len) {
-				uint8_t param = payload[i++];
-				g_ctx.rejoin_max_time = param & 0x0F;
-				g_ctx.rejoin_max_count = (param >> 4) & 0x0F;
-
-				LOG_INF("RejoinParamSetupReq: MaxTime=%u, MaxCount=%u",
-					g_ctx.rejoin_max_time,
-					g_ctx.rejoin_max_count);
-			} else {
-				return;
-			}
-			if (g_ctx.mac_rsp_len + 2 <= sizeof(g_ctx.mac_rsp_buf)) {
-				g_ctx.mac_rsp_buf[g_ctx.mac_rsp_len++] = 0x0F;
-				g_ctx.mac_rsp_buf[g_ctx.mac_rsp_len++] = 0x01;
-			}
-			break;
-		}
 		default:
 			return;
 		}
@@ -381,14 +311,6 @@ void append_uplink_mac_cmds(void)
 {
 	uint8_t *p = g_ctx.mac_rsp_buf + g_ctx.mac_rsp_len;
 	int remaining = (int)sizeof(g_ctx.mac_rsp_buf) - (int)g_ctx.mac_rsp_len;
-
-	if (g_ctx.reset_ind_pending && remaining >= 2) {
-		*p++ = 0x01;
-		*p++ = g_ctx.minor_version;
-		g_ctx.mac_rsp_len += 2;
-		remaining -= 2;
-		g_ctx.reset_ind_pending = false;
-	}
 
 	if (g_ctx.link_check_req_pending && remaining >= 1) {
 		*p++ = 0x02;

@@ -24,7 +24,7 @@ extern "C" {
 #define US915_NUM_125K_CH    64
 #define US915_NUM_500K_CH    8
 #define US915_NUM_DOWN_CH    8
-#define US915_NUM_DR         10
+#define US915_NUM_DR         14
 #define US915_RX2_FREQ      923300000U
 #define US915_RX2_DR         8
 #define US915_RX1_DELAY_S    1

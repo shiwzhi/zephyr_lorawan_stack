@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 void process_downlink(uint8_t *phy, size_t len, int16_t rssi,
-		      int8_t snr, bool *ack_received);
+		      int8_t snr, bool *ack_received,
+		      bool is_class_c);
 
 #endif /* LORAWAN_DOWNLINK_H_ */

@@ -1,0 +1,63 @@
+# LoRaWAN Custom Stack Configuration
+# Uses own MAC/PHY implementation (not zephyr's subsys/lorawan).
+
+menuconfig LORAWAN_CUSTOM
+    bool "Custom LoRaWAN Stack"
+    default y
+    help
+      Custom LoRaWAN MAC/PHY stack implementation in src/lorawan/.
+      Disable Zephyr's CONFIG_LORAWAN when using this.
+
+if LORAWAN_CUSTOM
+
+choice LORAWAN_CUSTOM_VERSION
+    prompt "LoRaWAN Specification Version"
+    default LORAWAN_CUSTOM_VERSION_1_0_4
+    help
+      Select the LoRaWAN specification version.
+
+config LORAWAN_CUSTOM_VERSION_1_0_3
+    bool "v1.0.3"
+
+config LORAWAN_CUSTOM_VERSION_1_0_4
+    bool "v1.0.4"
+endchoice
+
+choice LORAWAN_CUSTOM_REGION
+    prompt "LoRaWAN Region"
+    default LORAWAN_CUSTOM_REGION_EU868
+
+config LORAWAN_CUSTOM_REGION_AS923
+    bool "AS923"
+
+config LORAWAN_CUSTOM_REGION_AU915
+    bool "AU915"
+
+config LORAWAN_CUSTOM_REGION_CN470
+    bool "CN470"
+    depends on LORAWAN_CUSTOM_VERSION_1_0_3
+
+config LORAWAN_CUSTOM_REGION_CN779
+    bool "CN779"
+
+config LORAWAN_CUSTOM_REGION_EU433
+    bool "EU433"
+    depends on LORAWAN_CUSTOM_VERSION_1_0_3
+
+config LORAWAN_CUSTOM_REGION_EU868
+    bool "EU868"
+
+config LORAWAN_CUSTOM_REGION_KR920
+    bool "KR920"
+
+config LORAWAN_CUSTOM_REGION_IN865
+    bool "IN865"
+
+config LORAWAN_CUSTOM_REGION_US915
+    bool "US915"
+
+config LORAWAN_CUSTOM_REGION_RU864
+    bool "RU864"
+endchoice
+
+endif # LORAWAN_CUSTOM

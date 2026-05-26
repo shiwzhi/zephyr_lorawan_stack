@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * LoRaWAN CN470-510 region-specific parameters and functions.
- * Per LoRaWAN 1.0.3 Regional Parameters v1.0.3 Rev A.
  */
 
 #ifndef LORAWAN_REGION_CN470_H_
@@ -19,7 +18,9 @@ extern "C" {
 /* CN470-510 channel configuration */
 #define CN470_NUM_UP_CH      96
 #define CN470_NUM_DOWN_CH    48
+#ifndef CN470_NUM_DR
 #define CN470_NUM_DR         6
+#endif
 
 /* CN470-510 frequency configuration */
 #define CN470_UP_FREQ_START   470300000U
@@ -34,7 +35,9 @@ extern "C" {
 
 /* CN470-510 default RX2 settings */
 #define CN470_RX2_FREQ       505300000U
+#ifndef CN470_RX2_DR
 #define CN470_RX2_DR         0
+#endif
 
 /* CN470-510 default TX power (dBm) */
 #define CN470_DEFAULT_TX_POWER 14

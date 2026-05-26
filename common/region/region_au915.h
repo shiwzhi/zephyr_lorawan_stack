@@ -24,7 +24,7 @@ extern "C" {
 #define AU915_NUM_125K_CH    64
 #define AU915_NUM_500K_CH    8
 #define AU915_NUM_DOWN_CH    8
-#define AU915_NUM_DR         10
+#define AU915_NUM_DR         14
 #define AU915_RX2_FREQ      923300000U
 #define AU915_RX2_DR         8
 #define AU915_RX1_DELAY_S    1

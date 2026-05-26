@@ -1,5 +1,5 @@
 #include "downlink.h"
-#include "mac_commands.h"
+#include "mac/mac_commands.h"
 #include "../lorawan_state.h"
 #include "../crypto/lorawan_crypto.h"
 #include <zephyr/logging/log.h>
@@ -7,7 +7,8 @@
 LOG_MODULE_DECLARE(lorawan, CONFIG_LOG_DEFAULT_LEVEL);
 
 void process_downlink(uint8_t *phy, size_t len, int16_t rssi,
-		     int8_t snr, bool *ack_received)
+		     int8_t snr, bool *ack_received,
+		     bool is_class_c)
 {
 	if (len < 12) {
 		LOG_WRN("Downlink too short: %zu bytes", len);
@@ -63,6 +64,15 @@ void process_downlink(uint8_t *phy, size_t len, int16_t rssi,
 
 	if (memcmp(mic, rx_mic, 4) != 0) {
 		LOG_WRN("Downlink MIC mismatch");
+		return;
+	}
+
+	/* Per LoRaWAN spec: Class C downlinks SHALL NOT carry MAC commands.
+	 * If they do, the entire frame SHALL be silently discarded.
+	 */
+	if (is_class_c && (fopts_len > 0 || (len > 8 + fopts_len + 4 &&
+	    phy[8 + fopts_len] == 0 && len > 8 + fopts_len + 1 + 4))) {
+		LOG_WRN("Class C downlink with MAC commands discarded");
 		return;
 	}
 
