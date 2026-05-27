@@ -10,19 +10,6 @@ menuconfig LORAWAN_CUSTOM
 
 if LORAWAN_CUSTOM
 
-choice LORAWAN_CUSTOM_VERSION
-    prompt "LoRaWAN Specification Version"
-    default LORAWAN_CUSTOM_VERSION_1_0_4
-    help
-      Select the LoRaWAN specification version.
-
-config LORAWAN_CUSTOM_VERSION_1_0_3
-    bool "v1.0.3"
-
-config LORAWAN_CUSTOM_VERSION_1_0_4
-    bool "v1.0.4"
-endchoice
-
 choice LORAWAN_CUSTOM_REGION
     prompt "LoRaWAN Region"
     default LORAWAN_CUSTOM_REGION_EU868
@@ -35,14 +22,12 @@ config LORAWAN_CUSTOM_REGION_AU915
 
 config LORAWAN_CUSTOM_REGION_CN470
     bool "CN470"
-    depends on LORAWAN_CUSTOM_VERSION_1_0_3
 
 config LORAWAN_CUSTOM_REGION_CN779
     bool "CN779"
 
 config LORAWAN_CUSTOM_REGION_EU433
     bool "EU433"
-    depends on LORAWAN_CUSTOM_VERSION_1_0_3
 
 config LORAWAN_CUSTOM_REGION_EU868
     bool "EU868"
