@@ -697,12 +697,12 @@ static int send_join_request(uint8_t *rx_buf, size_t rx_buflen)
 	struct lorawan_rx_config rx_cfg = {
 		.rx1_freq = rx1_freq,
 		.rx1_dr   = rx1_dr,
-		.rx1_timeout_ms = region_get_rx_window_timeout_ms(&g_ctx.region, rx1_dr),
-		.rx1_delay_ms   = JOIN_RX1_DELAY_MS - RX_EARLY_MS,
+		.rx1_timeout_ms = RX_TIMEOUT_MS,
+		.rx1_delay_ms   = JOIN_RX1_DELAY_MS,
 		.rx2_freq = rx2_freq,
 		.rx2_dr   = rx2_dr,
-		.rx2_timeout_ms = region_get_rx_window_timeout_ms(&g_ctx.region, rx2_dr),
-		.rx2_delay_ms   = JOIN_RX2_DELAY_MS - RX_EARLY_MS,
+		.rx2_timeout_ms = RX2_TIMEOUT_MS,
+		.rx2_delay_ms   = JOIN_RX2_DELAY_MS,
 	};
 	struct lorawan_rx_result result;
 	return lorawan_rx(&rx_cfg, tx_end_time, rx_buf, rx_buflen, &result);
@@ -815,6 +815,7 @@ int lorawan_join(const struct lorawan_join_config *config)
 		g_ctx.fcnt_up = 0;
 		g_ctx.fcnt_down = 0;
 		g_ctx.state = STATE_JOINED;
+		g_ctx.current_dr = g_ctx.join_dr;
 
 		LOG_INF("Joined! DevAddr=%08x", dev_addr);
 
@@ -926,20 +927,20 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len,
 
 	append_uplink_mac_cmds();
 
-	/* ADR_ACK_CNT backoff logic */
-	if (g_ctx.adr_enabled && g_ctx.adr_ack_cnt > 0) {
-		if (g_ctx.adr_ack_cnt >= (1 << g_ctx.adr_delay_exp)) {
-			/* Reduce data rate */
+	/* ADR ACK backoff logic per LoRaWAN spec §5.2 */
+	if (g_ctx.adr_enabled) {
+		g_ctx.adr_ack_cnt++;
+
+		if (g_ctx.adr_ack_cnt >= ((1 << g_ctx.adr_limit_exp) + (1 << g_ctx.adr_delay_exp))) {
+			/* ADR_ACK_LIMIT + ADR_ACK_DELAY reached — reduce DR */
 			if (g_ctx.current_dr > 0) {
 				g_ctx.current_dr--;
 				if (g_ctx.dr_changed_cb) {
 					g_ctx.dr_changed_cb(g_ctx.current_dr);
 				}
-				LOG_INF("ADR: Reduced DR to %d due to ADR_ACK_CNT backoff", g_ctx.current_dr);
+				LOG_INF("ADR: Reduced DR to %d due to ADR ACK backoff", g_ctx.current_dr);
 			}
 			g_ctx.adr_ack_cnt = 0;
-		} else {
-			g_ctx.adr_ack_cnt++;
 		}
 	}
 
@@ -953,6 +954,9 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len,
 
 	if (g_ctx.adr_enabled) {
 		fctrl |= FCTRL_ADR;
+		if (g_ctx.adr_ack_cnt >= (1 << g_ctx.adr_limit_exp)) {
+			fctrl |= FCTRL_ADRACKREQ;
+		}
 	}
 
 	if (g_ctx.downlink_ack_pending) {
@@ -1041,12 +1045,12 @@ int lorawan_send(uint8_t port, uint8_t *data, uint8_t len,
 		}
 		uint32_t rx2_freq = get_rx2_freq();
 		uint8_t rx2_dr = get_rx2_dr();
-		uint16_t rx1_timeout = region_get_rx_window_timeout_ms(&g_ctx.region, rx1_dr);
-		uint16_t rx2_timeout = region_get_rx_window_timeout_ms(&g_ctx.region, rx2_dr);
+		uint16_t rx1_timeout = RX_TIMEOUT_MS;
+		uint16_t rx2_timeout = RX2_TIMEOUT_MS;
 		uint8_t rx1_delay = (g_ctx.rx_timing_delay != 0) ?
 				    g_ctx.rx_timing_delay : g_ctx.region.rx1_delay_s;
-		int64_t rx1_delay_ms = rx1_delay * 1000 - RX_EARLY_MS;
-		int64_t rx2_delay_ms = (rx1_delay + 1) * 1000 - RX_EARLY_MS;
+		int64_t rx1_delay_ms = rx1_delay * 1000;
+		int64_t rx2_delay_ms = (rx1_delay + 1) * 1000;
 
 		struct lorawan_rx_config rx_cfg = {
 			.rx1_freq = rx1_freq,

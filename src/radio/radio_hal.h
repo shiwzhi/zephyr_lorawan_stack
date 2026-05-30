@@ -4,6 +4,13 @@
 #include <stdint.h>
 #include <stddef.h>
 
+/* Open RX windows early to cover radio setup */
+#define RX_EARLY_MS             10
+
+/* Fixed RX window timeout */
+#define RX_TIMEOUT_MS           950
+#define RX2_TIMEOUT_MS          2000
+
 struct lorawan_channel;
 
 struct lorawan_tx_config {

@@ -32,9 +32,6 @@
 /* FCtrl bits (downlink) */
 #define FCTRL_FPENDING  BIT(4)
 
-/* Open RX windows early to cover radio setup */
-#define RX_EARLY_MS             10
-
 /* Join RX window delays (per LoRaWAN spec) */
 #define JOIN_RX1_DELAY_MS      5000
 #define JOIN_RX2_DELAY_MS      6000

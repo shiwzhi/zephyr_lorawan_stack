@@ -12,38 +12,32 @@ src/lorawan/
 ├── CMakeLists.txt
 ├── Kconfig
 ├── README.md
-├── include/                    ← all public headers
-│   ├── lorawan_state.h         global state struct, protocol constants
-│   ├── crypto/
-│   │   ├── aes128.h            AES-128 ECB block encrypt
-│   │   ├── aes_cmac.h          AES-CMAC (RFC 4493)
-│   │   └── lorawan_crypto.h    MIC, payload encrypt, session key derivation
-│   ├── radio/
-│   │   └── radio_hal.h         TX/RX config, FHDR builder, channel selection
-│   └── region/
-│       ├── region.h            region_ctx struct, dispatcher API
-│       └── region_*.h          10 region headers (self-contained, header-only)
-└── src/                        ← implementation
+└── src/
     ├── lorawan_impl.c          all MAC logic: join, send, RX windows,
     │                           MAC commands, downlink parsing, Class A/C
+    ├── lorawan_state.h         global state struct, protocol constants
     ├── crypto/
-    │   ├── aes128.c
-    │   ├── aes_cmac.c
-    │   └── lorawan_crypto.c
+    │   ├── aes128.h / .c       AES-128 ECB block encrypt
+    │   ├── aes_cmac.h / .c     AES-CMAC (RFC 4493)
+    │   └── lorawan_crypto.h / .c  MIC, payload encrypt, session key derivation
     ├── radio/
-    │   └── radio_hal.c
+    │   └── radio_hal.h / .c    TX/RX config, FHDR builder, channel selection
     └── region/
-        └── region.c            region dispatcher (#ifdef per-region)
+        ├── region.h            region_ctx struct, generic inline helpers
+        └── region_xxxxx.c      10 self-contained region implementations
+                                (one compiled per build via Kconfig)
 ```
 
 All MAC-layer logic (join procedure, uplink framing, RX1/RX2 window
 handling, downlink parsing, MAC command processing, and Class A/C
 state management) is consolidated in `src/lorawan_impl.c`.
 
-Region headers (`include/region/region_*.h`) are **header-only**: each
-contains `static const` data tables and `static inline` helper functions.
-No separate region `.c` files are needed. Only the selected region is
-compiled via `#ifdef` guards in `src/region/region.c`.
+Each `src/region/region_xxxxx.c` is self-contained: it includes
+`region.h`, defines its own data tables, and implements all region
+API functions (`region_init`, `region_get_rx1_dr`, etc.). Only the
+selected region's `.c` is compiled — no dispatcher, no `#ifdef` soup.
+Generic helpers (`region_dr_to_lora`, `region_get_join_channel`,
+`region_cflist_type_a/b`) are `static inline` in `region.h`.
 
 ## Region Selection (Kconfig)
 
@@ -110,7 +104,7 @@ CONFIG_LORAWAN_CUSTOM_REGION_CN470=y
 
 ## Region Abstraction
 
-`include/region/region.h` defines `struct region_ctx` which holds all
+`src/region/region.h` defines `struct region_ctx` which holds all
 per-region state:
 
 - Channel list (frequency, DR range, enable mask)
@@ -121,9 +115,9 @@ per-region state:
 - Frequency band limits (`freq_min_hz`, `freq_max_hz`)
 - Class C RXC parameters (`rxc_freq`, `rxc_dr` — default to RX2)
 
-`src/region/region.c` dispatches to region-specific setup functions
-via `#ifdef CONFIG_LORAWAN_CUSTOM_REGION_*`. Adding a new region requires
-a single header in `include/region/`.
+`src/region/region.c` dispatches to region-specific implementations.
+Adding a new region requires a single `.c` file in `src/region/`
+and a Kconfig entry.
 
 ## Dependencies
 
@@ -152,24 +146,31 @@ CONFIG_LORAWAN_CUSTOM_REGION_EU868=y
 
 ## Build System
 
-`CMakeLists.txt` defines a single STATIC library:
+`CMakeLists.txt` defines a single STATIC library with conditional
+region compilation:
 
 ```cmake
+set(REGION_SRCS "")
+if(CONFIG_LORAWAN_CUSTOM_REGION_EU868)
+  list(APPEND REGION_SRCS src/region/region_eu868.c)
+elseif(CONFIG_LORAWAN_CUSTOM_REGION_US915)
+  list(APPEND REGION_SRCS src/region/region_us915.c)
+# ... one per region
+endif()
+
 add_library(lorawan STATIC
     src/lorawan_impl.c
     src/crypto/aes128.c src/crypto/aes_cmac.c src/crypto/lorawan_crypto.c
     src/radio/radio_hal.c
-    src/region/region.c
+    ${REGION_SRCS}
 )
-target_include_directories(lorawan PUBLIC include/
-    PRIVATE include/crypto include/radio include/region)
+target_include_directories(lorawan PRIVATE src/)
 ```
 
-No per-region `.c` files to list. The Kconfig `#ifdef`s in `region.c`
-handle region selection automatically.
+Only the selected region's `.c` is compiled and linked.
 
 Include path order (GCC `-I`):
-1. `include/` (PUBLIC) — finds all headers uniformly
+1. `src/` (PRIVATE) — finds all headers uniformly
 
 ## License
 

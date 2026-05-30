@@ -1,6 +1,6 @@
-#include "lorawan_crypto.h"
-#include "aes128.h"
-#include "aes_cmac.h"
+#include "crypto/lorawan_crypto.h"
+#include "crypto/aes128.h"
+#include "crypto/aes_cmac.h"
 #include <string.h>
 #include <zephyr/logging/log.h>
 

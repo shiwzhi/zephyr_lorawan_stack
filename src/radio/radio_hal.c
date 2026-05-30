@@ -1,9 +1,10 @@
-#include "radio_hal.h"
+#include "radio/radio_hal.h"
 #include "lorawan_state.h"
 #include "region/region.h"
 #include <zephyr/drivers/lora.h>
 #include <zephyr/random/random.h>
 #include <zephyr/logging/log.h>
+#include <inttypes.h>
 #include <errno.h>
 
 LOG_MODULE_DECLARE(lorawan, CONFIG_LOG_DEFAULT_LEVEL);
@@ -141,11 +142,11 @@ int lorawan_tx(const struct lorawan_tx_config *cfg)
 	}
 	ret = lora_send(lora_dev, cfg->buf, cfg->len);
 	if (ret == 0) {
-		enum lora_datarate sf;
-		enum lora_signal_bandwidth bw;
+		enum lora_datarate sf = 0;
+		enum lora_signal_bandwidth bw = 0;
 		region_dr_to_lora(&g_ctx.region, cfg->dr, &sf, &bw);
 		LOG_INF("TX: freq=%u Hz, SF=%d, BW=%d kHz, power=%d dBm, size=%u bytes",
-			cfg->freq, sf, bw, get_tx_power_dbm(), (unsigned)cfg->len);
+			cfg->freq, (int)sf, (int)bw, get_tx_power_dbm(), (unsigned)cfg->len);
 	}
 	return ret;
 }
@@ -158,16 +159,16 @@ int lorawan_rx(const struct lorawan_rx_config *cfg,
 	int ret;
 	int64_t target;
 	int64_t now;
-	enum lora_datarate sf;
-	enum lora_signal_bandwidth bw;
+	enum lora_datarate sf = 0;
+	enum lora_signal_bandwidth bw = 0;
 
 	/* === RX1 === */
 	radio_configure_rx(cfg->rx1_freq, cfg->rx1_dr);
 	region_dr_to_lora(&g_ctx.region, cfg->rx1_dr, &sf, &bw);
 
-	target = tx_end_time + cfg->rx1_delay_ms;
+	target = tx_end_time + cfg->rx1_delay_ms - RX_EARLY_MS;
 	LOG_INF("RX1: freq=%u Hz, SF=%d, BW=%d kHz, target at t=%lld ms",
-		cfg->rx1_freq, sf, bw, (long long)target);
+		cfg->rx1_freq, (int)sf, (int)bw, (long long)target);
 	now = k_uptime_get();
 	if (now < target) {
 		k_msleep(target - now);
@@ -187,9 +188,9 @@ int lorawan_rx(const struct lorawan_rx_config *cfg,
 	radio_configure_rx(cfg->rx2_freq, cfg->rx2_dr);
 	region_dr_to_lora(&g_ctx.region, cfg->rx2_dr, &sf, &bw);
 
-	target = tx_end_time + cfg->rx2_delay_ms;
+	target = tx_end_time + cfg->rx2_delay_ms - RX_EARLY_MS;
 	LOG_INF("RX2: freq=%u Hz, SF=%d, BW=%d kHz, target at t=%lld ms",
-		cfg->rx2_freq, sf, bw, (long long)target);
+		cfg->rx2_freq, (int)sf, (int)bw, (long long)target);
 	now = k_uptime_get();
 	if (now < target) {
 		k_msleep(target - now);
